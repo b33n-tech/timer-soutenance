@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timeline Soutenance</title>
 
 <style>
@@ -33,6 +34,12 @@ h1 { text-align: center; }
   text-align: center;
   background: #222;
   opacity: 0.4;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.block.done {
+  background: #444;
+  opacity: 0.25;
 }
 
 .block.active {
@@ -41,14 +48,17 @@ h1 { text-align: center; }
   transform: scale(1.05);
 }
 
+.block.active.orange {
+  background: #d29922;
+}
+
+.block.active.red {
+  background: #da3633;
+}
+
 .block.next {
   background: #2ea043;
   opacity: 0.7;
-}
-
-.block.done {
-  background: #444;
-  opacity: 0.25;
 }
 
 .title { font-weight: bold; }
@@ -66,6 +76,7 @@ h1 { text-align: center; }
   height: 100%;
   background: #1f6feb;
   width: 0%;
+  transition: width 0.3s ease;
 }
 
 #sectionTime {
@@ -78,12 +89,27 @@ h1 { text-align: center; }
   display: flex;
   justify-content: center;
   gap: 15px;
+  flex-wrap: wrap;
 }
 
 button {
   padding: 12px 20px;
   font-size: 1em;
   cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background: #1f6feb;
+  color: white;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #1a5acc;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
 </head>
@@ -103,15 +129,15 @@ button {
 <div id="sectionTime">Prêt</div>
 
 <div class="controls">
-  <button onclick="start()">Lancer</button>
-  <button onclick="skipSection()">Section suivante</button>
-  <button onclick="iAmLate()">Je suis en retard</button>
+  <button id="startBtn" onclick="start()">Lancer</button>
+  <button id="skipBtn" onclick="skipSection()" disabled>Section suivante</button>
+  <button id="lateBtn" onclick="iAmLate()" disabled>Je suis en retard</button>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
 
-let schedule = [
+const initialSchedule = [
   { name: "Intro", duration: 120 },
   { name: "Théorie", duration: 240 },
   { name: "Méthodo", duration: 390 },
@@ -121,13 +147,49 @@ let schedule = [
   { name: "Buffer", duration: 60 }
 ];
 
+let schedule = [];
+
+/* ================= DOM ELEMENTS ================= */
+
 const timeline = document.getElementById("timeline");
+const globalTimeEl = document.getElementById("globalTime");
+const sectionTimeEl = document.getElementById("sectionTime");
+const progressBar = document.getElementById("progress");
+const startBtn = document.getElementById("startBtn");
+const skipBtn = document.getElementById("skipBtn");
+const lateBtn = document.getElementById("lateBtn");
+
+/* ================= TIMER STATE ================= */
+
+let current = 0;
+let sectionRemaining = 0;
+let globalElapsed = 0;
+let timer = null;
+let isRunning = false;
+
+/* ================= HELPERS ================= */
+
+function format(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, "0");
+  const s = String(sec % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function getTotalDuration() {
+  return schedule.reduce((sum, section) => sum + section.duration, 0);
+}
+
+function updateButtons() {
+  skipBtn.disabled = !isRunning || current >= schedule.length - 1;
+  lateBtn.disabled = !isRunning;
+  startBtn.textContent = isRunning ? "Redémarrer" : "Lancer";
+}
 
 /* ================= UI ================= */
 
 function renderTimeline() {
   timeline.innerHTML = "";
-  schedule.forEach(section => {
+  schedule.forEach((section, index) => {
     const block = document.createElement("div");
     block.className = "block";
     block.innerHTML = `
@@ -136,44 +198,64 @@ function renderTimeline() {
     `;
     timeline.appendChild(block);
   });
-}
-
-renderTimeline();
-
-/* ================= TIMER ================= */
-
-let current = 0;
-let sectionRemaining = 0;
-let globalElapsed = 0;
-let timer = null;
-
-function format(sec) {
-  const m = String(Math.floor(sec / 60)).padStart(2, "0");
-  const s = String(sec % 60).padStart(2, "0");
-  return `${m}:${s}`;
-}
-
-function updateTimeline() {
-  [...timeline.children].forEach((block, i) => {
-    block.classList.remove("active", "next", "done");
-    if (i < current) block.classList.add("done");
-    else if (i === current) block.classList.add("active");
-    else if (i === current + 1) block.classList.add("next");
-  });
-}
-
-function startSection() {
-  sectionRemaining = schedule[current].duration;
   updateTimeline();
 }
 
-/* ===== AVANCE ===== */
+function updateTimeline() {
+  const blocks = timeline.children;
+  
+  for (let i = 0; i < blocks.length; i++) {
+    blocks[i].className = "block";
+
+    if (i < current) {
+      blocks[i].classList.add("done");
+    } else if (i === current) {
+      blocks[i].classList.add("active");
+
+      if (sectionRemaining <= 15) {
+        blocks[i].classList.add("red");
+      } else if (sectionRemaining <= 30) {
+        blocks[i].classList.add("orange");
+      }
+    } else if (i === current + 1) {
+      blocks[i].classList.add("next");
+    }
+  }
+}
+
+function updateDisplay() {
+  const total = getTotalDuration();
+  
+  globalTimeEl.textContent = `Temps : ${format(globalElapsed)} / ${format(total)}`;
+  
+  if (current < schedule.length) {
+    sectionTimeEl.textContent = `${schedule[current].name} – ${format(Math.max(0, sectionRemaining))}`;
+  } else {
+    sectionTimeEl.textContent = "Terminé";
+  }
+  
+  const progress = Math.min(100, (globalElapsed / total) * 100);
+  progressBar.style.width = `${progress}%`;
+  
+  updateTimeline();
+}
+
+/* ================= SECTION MANAGEMENT ================= */
+
+function startSection() {
+  if (current < schedule.length) {
+    sectionRemaining = schedule[current].duration;
+    updateDisplay();
+  }
+}
 
 function skipSection() {
-  const leftover = sectionRemaining;
+  if (!isRunning || current >= schedule.length - 1) return;
+
+  const leftover = Math.max(0, sectionRemaining);
   const remaining = schedule.length - current - 1;
 
-  if (remaining > 0) {
+  if (remaining > 0 && leftover > 0) {
     const bonus = Math.floor(leftover / remaining);
     for (let i = current + 1; i < schedule.length; i++) {
       schedule[i].duration += bonus;
@@ -184,61 +266,85 @@ function skipSection() {
   if (current < schedule.length) {
     startSection();
     renderTimeline();
+  } else {
+    stopTimer();
   }
+  
+  updateButtons();
 }
-
-/* ===== RETARD ===== */
 
 function iAmLate() {
-  const remainingSections = schedule.slice(current);
-  const remainingTime = remainingSections.reduce((a, b) => a + b.duration, 0);
+  if (!isRunning) return;
 
-  const compressionRatio = 0.85; // 15 % de compression douce
+  const compressionRatio = 0.85;
 
-  remainingSections.forEach(section => {
-    section.duration = Math.max(30, Math.floor(section.duration * compressionRatio));
-  });
+  for (let i = current; i < schedule.length; i++) {
+    schedule[i].duration = Math.max(
+      30,
+      Math.floor(schedule[i].duration * compressionRatio)
+    );
+  }
 
-  sectionRemaining = Math.min(sectionRemaining, schedule[current].duration);
+  sectionRemaining = Math.min(
+    sectionRemaining,
+    schedule[current].duration
+  );
+
   renderTimeline();
-  updateTimeline();
 }
 
-/* ===== START ===== */
+/* ================= TIMER CONTROL ================= */
+
+function stopTimer() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+  isRunning = false;
+  updateButtons();
+}
 
 function start() {
-  if (timer) clearInterval(timer);
+  stopTimer();
 
+  // Reset state
+  schedule = initialSchedule.map(s => ({ ...s }));
   current = 0;
   globalElapsed = 0;
+  isRunning = true;
+
+  renderTimeline();
   startSection();
+  updateButtons();
 
   timer = setInterval(() => {
     sectionRemaining--;
     globalElapsed++;
 
-    document.getElementById("sectionTime").textContent =
-      `${schedule[current].name} – ${format(sectionRemaining)}`;
-
-    const total = schedule.reduce((a, b) => a + b.duration, 0);
-    document.getElementById("globalTime").textContent =
-      `Temps : ${format(globalElapsed)} / ${format(total)}`;
-
-    document.getElementById("progress").style.width =
-      `${(globalElapsed / total) * 100}%`;
+    updateDisplay();
 
     if (sectionRemaining <= 0) {
       current++;
+      
       if (current < schedule.length) {
         startSection();
         renderTimeline();
       } else {
-        clearInterval(timer);
-        document.getElementById("sectionTime").textContent = "Terminé";
+        stopTimer();
+        sectionTimeEl.textContent = "Terminé ✓";
       }
+      
+      updateButtons();
     }
   }, 1000);
 }
+
+/* ================= INITIALIZATION ================= */
+
+schedule = initialSchedule.map(s => ({ ...s }));
+renderTimeline();
+updateButtons();
+
 </script>
 
 </body>
