@@ -1,91 +1,93 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Timeline Soutenance</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #0f0f0f;
-      color: #eee;
-      padding: 30px;
-    }
+<meta charset="UTF-8" />
+<title>Timeline Soutenance</title>
 
-    h1 { text-align: center; }
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f0f0f;
+  color: #eee;
+  padding: 30px;
+}
 
-    #globalTime {
-      text-align: center;
-      font-size: 2.4em;
-      margin-bottom: 20px;
-    }
+h1 { text-align: center; }
 
-    .timeline {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 10px;
-      margin-bottom: 25px;
-    }
+#globalTime {
+  text-align: center;
+  font-size: 2.3em;
+  margin-bottom: 20px;
+}
 
-    .block {
-      padding: 14px;
-      border-radius: 10px;
-      text-align: center;
-      background: #222;
-      opacity: 0.4;
-    }
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  margin-bottom: 25px;
+}
 
-    .block.active {
-      background: #1f6feb;
-      opacity: 1;
-      transform: scale(1.05);
-    }
+.block {
+  padding: 14px;
+  border-radius: 10px;
+  text-align: center;
+  background: #222;
+  opacity: 0.4;
+}
 
-    .block.next {
-      background: #2ea043;
-      opacity: 0.7;
-    }
+.block.active {
+  background: #1f6feb;
+  opacity: 1;
+  transform: scale(1.05);
+}
 
-    .block.done {
-      background: #444;
-      opacity: 0.25;
-    }
+.block.next {
+  background: #2ea043;
+  opacity: 0.7;
+}
 
-    .title { font-weight: bold; }
-    .time { font-size: 0.85em; opacity: 0.8; }
+.block.done {
+  background: #444;
+  opacity: 0.25;
+}
 
-    .progress-container {
-      background: #222;
-      border-radius: 8px;
-      height: 14px;
-      overflow: hidden;
-      margin-bottom: 15px;
-    }
+.title { font-weight: bold; }
+.time { font-size: 0.85em; opacity: 0.8; }
 
-    .progress-bar {
-      height: 100%;
-      background: #1f6feb;
-      width: 0%;
-    }
+.progress-container {
+  background: #222;
+  border-radius: 8px;
+  height: 14px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
 
-    #sectionTime {
-      text-align: center;
-      font-size: 1.6em;
-      margin-bottom: 20px;
-    }
+.progress-bar {
+  height: 100%;
+  background: #1f6feb;
+  width: 0%;
+}
 
-    .controls {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-    }
+#sectionTime {
+  text-align: center;
+  font-size: 1.6em;
+  margin-bottom: 20px;
+}
 
-    button {
-      padding: 12px 20px;
-      font-size: 1em;
-      cursor: pointer;
-    }
-  </style>
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+button {
+  padding: 12px 20px;
+  font-size: 1em;
+  cursor: pointer;
+}
+</style>
 </head>
+
 <body>
 
 <h1>Timeline Soutenance</h1>
@@ -103,12 +105,11 @@
 <div class="controls">
   <button onclick="start()">Lancer</button>
   <button onclick="skipSection()">Section suivante</button>
+  <button onclick="iAmLate()">Je suis en retard</button>
 </div>
 
 <script>
-/* =========================
-   CONFIGURATION
-   ========================= */
+/* ================= CONFIG ================= */
 
 let schedule = [
   { name: "Intro", duration: 120 },
@@ -120,11 +121,9 @@ let schedule = [
   { name: "Buffer", duration: 60 }
 ];
 
-/* =========================
-   UI SETUP
-   ========================= */
-
 const timeline = document.getElementById("timeline");
+
+/* ================= UI ================= */
 
 function renderTimeline() {
   timeline.innerHTML = "";
@@ -141,20 +140,12 @@ function renderTimeline() {
 
 renderTimeline();
 
-/* =========================
-   TIMER LOGIC
-   ========================= */
+/* ================= TIMER ================= */
 
 let current = 0;
 let sectionRemaining = 0;
 let globalElapsed = 0;
 let timer = null;
-
-function totalRemainingTime() {
-  return schedule
-    .slice(current)
-    .reduce((a, b) => a + b.duration, 0);
-}
 
 function format(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -176,32 +167,44 @@ function startSection() {
   updateTimeline();
 }
 
-function redistribute(extraTime) {
-  const remainingSections = schedule.length - current - 1;
-  if (remainingSections <= 0) return;
-
-  const bonus = Math.floor(extraTime / remainingSections);
-
-  for (let i = current + 1; i < schedule.length; i++) {
-    schedule[i].duration += bonus;
-  }
-}
+/* ===== AVANCE ===== */
 
 function skipSection() {
-  if (current >= schedule.length) return;
-
   const leftover = sectionRemaining;
-  redistribute(leftover);
+  const remaining = schedule.length - current - 1;
+
+  if (remaining > 0) {
+    const bonus = Math.floor(leftover / remaining);
+    for (let i = current + 1; i < schedule.length; i++) {
+      schedule[i].duration += bonus;
+    }
+  }
 
   current++;
   if (current < schedule.length) {
     startSection();
     renderTimeline();
-  } else {
-    clearInterval(timer);
-    document.getElementById("sectionTime").textContent = "Terminé";
   }
 }
+
+/* ===== RETARD ===== */
+
+function iAmLate() {
+  const remainingSections = schedule.slice(current);
+  const remainingTime = remainingSections.reduce((a, b) => a + b.duration, 0);
+
+  const compressionRatio = 0.85; // 15 % de compression douce
+
+  remainingSections.forEach(section => {
+    section.duration = Math.max(30, Math.floor(section.duration * compressionRatio));
+  });
+
+  sectionRemaining = Math.min(sectionRemaining, schedule[current].duration);
+  renderTimeline();
+  updateTimeline();
+}
+
+/* ===== START ===== */
 
 function start() {
   if (timer) clearInterval(timer);
