@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Timer Soutenance Mémoire</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+      text-align: center;
+      padding: 40px;
+    }
+    h1 { font-size: 2.2em; }
+    #section { font-size: 1.6em; margin-top: 20px; }
+    #time { font-size: 4em; margin: 20px 0; }
+    button {
+      font-size: 1.2em;
+      padding: 12px 24px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Soutenance – Timer guidé</h1>
+<div id="section">Prêt</div>
+<div id="time">00:00</div>
+<button onclick="start()">Lancer</button>
+
+<script>
+/* =========================
+   CONFIGURATION
+   ========================= */
+
+const schedule = [
+  { name: "Introduction", duration: 120 },
+  { name: "Cadre théorique", duration: 240 },
+  { name: "Méthodologie", duration: 390 },
+  { name: "Résultats", duration: 480 },
+  { name: "Takeaways", duration: 120 },
+  { name: "Conclusion", duration: 180 },
+  { name: "Buffer temps", duration: 60, silent: true }
+];
+
+/* =========================
+   LOGIQUE
+   ========================= */
+
+let current = 0;
+let remaining = 0;
+let timer = null;
+
+function speak(text) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "fr-FR";
+  speechSynthesis.speak(utterance);
+}
+
+function format(seconds) {
+  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const s = String(seconds % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function startSection() {
+  const section = schedule[current];
+  remaining = section.duration;
+
+  document.getElementById("section").textContent =
+    section.silent ? "Buffer temps" : section.name;
+
+  if (!section.silent) {
+    speak(`Maintenant tu dois faire la partie ${section.name}`);
+  }
+
+  timer = setInterval(() => {
+    remaining--;
+    document.getElementById("time").textContent = format(remaining);
+
+    if (remaining === 30 && schedule[current + 1]) {
+      speak(`Dans 30 secondes on passe à la partie ${schedule[current + 1].name}`);
+    }
+
+    if (remaining <= 0) {
+      clearInterval(timer);
+      current++;
+      if (current < schedule.length) {
+        startSection();
+      } else {
+        speak("Soutenance terminée");
+        document.getElementById("section").textContent = "Terminé";
+      }
+    }
+  }, 1000);
+}
+
+function start() {
+  current = 0;
+  startSection();
+}
+</script>
+
+</body>
+</html>
