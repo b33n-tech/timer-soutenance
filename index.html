@@ -11,22 +11,19 @@
       padding: 30px;
     }
 
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
+    h1 { text-align: center; }
 
     #globalTime {
       text-align: center;
-      font-size: 2.5em;
-      margin-bottom: 30px;
+      font-size: 2.4em;
+      margin-bottom: 20px;
     }
 
     .timeline {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 10px;
-      margin-bottom: 30px;
+      margin-bottom: 25px;
     }
 
     .block {
@@ -35,7 +32,6 @@
       text-align: center;
       background: #222;
       opacity: 0.4;
-      transition: 0.3s;
     }
 
     .block.active {
@@ -54,43 +50,38 @@
       opacity: 0.25;
     }
 
-    .title {
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    .time {
-      font-size: 0.9em;
-      opacity: 0.8;
-    }
+    .title { font-weight: bold; }
+    .time { font-size: 0.85em; opacity: 0.8; }
 
     .progress-container {
-      width: 100%;
       background: #222;
       border-radius: 8px;
-      overflow: hidden;
       height: 14px;
-      margin-bottom: 20px;
+      overflow: hidden;
+      margin-bottom: 15px;
     }
 
     .progress-bar {
       height: 100%;
-      width: 0%;
       background: #1f6feb;
-      transition: width 1s linear;
+      width: 0%;
     }
 
     #sectionTime {
       text-align: center;
-      font-size: 1.8em;
+      font-size: 1.6em;
       margin-bottom: 20px;
     }
 
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
+
     button {
-      display: block;
-      margin: 0 auto;
-      padding: 12px 24px;
-      font-size: 1.1em;
+      padding: 12px 20px;
+      font-size: 1em;
       cursor: pointer;
     }
   </style>
@@ -109,14 +100,17 @@
 
 <div id="sectionTime">Prêt</div>
 
-<button onclick="start()">Lancer</button>
+<div class="controls">
+  <button onclick="start()">Lancer</button>
+  <button onclick="skipSection()">Section suivante</button>
+</div>
 
 <script>
 /* =========================
    CONFIGURATION
    ========================= */
 
-const schedule = [
+let schedule = [
   { name: "Intro", duration: 120 },
   { name: "Théorie", duration: 240 },
   { name: "Méthodo", duration: 390 },
@@ -126,23 +120,26 @@ const schedule = [
   { name: "Buffer", duration: 60 }
 ];
 
-const totalDuration = schedule.reduce((a, b) => a + b.duration, 0);
-
 /* =========================
    UI SETUP
    ========================= */
 
 const timeline = document.getElementById("timeline");
 
-schedule.forEach(section => {
-  const block = document.createElement("div");
-  block.className = "block";
-  block.innerHTML = `
-    <div class="title">${section.name}</div>
-    <div class="time">${Math.floor(section.duration / 60)} min</div>
-  `;
-  timeline.appendChild(block);
-});
+function renderTimeline() {
+  timeline.innerHTML = "";
+  schedule.forEach(section => {
+    const block = document.createElement("div");
+    block.className = "block";
+    block.innerHTML = `
+      <div class="title">${section.name}</div>
+      <div class="time">${Math.round(section.duration / 60)} min</div>
+    `;
+    timeline.appendChild(block);
+  });
+}
+
+renderTimeline();
 
 /* =========================
    TIMER LOGIC
@@ -152,6 +149,12 @@ let current = 0;
 let sectionRemaining = 0;
 let globalElapsed = 0;
 let timer = null;
+
+function totalRemainingTime() {
+  return schedule
+    .slice(current)
+    .reduce((a, b) => a + b.duration, 0);
+}
 
 function format(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -173,7 +176,36 @@ function startSection() {
   updateTimeline();
 }
 
+function redistribute(extraTime) {
+  const remainingSections = schedule.length - current - 1;
+  if (remainingSections <= 0) return;
+
+  const bonus = Math.floor(extraTime / remainingSections);
+
+  for (let i = current + 1; i < schedule.length; i++) {
+    schedule[i].duration += bonus;
+  }
+}
+
+function skipSection() {
+  if (current >= schedule.length) return;
+
+  const leftover = sectionRemaining;
+  redistribute(leftover);
+
+  current++;
+  if (current < schedule.length) {
+    startSection();
+    renderTimeline();
+  } else {
+    clearInterval(timer);
+    document.getElementById("sectionTime").textContent = "Terminé";
+  }
+}
+
 function start() {
+  if (timer) clearInterval(timer);
+
   current = 0;
   globalElapsed = 0;
   startSection();
@@ -185,16 +217,18 @@ function start() {
     document.getElementById("sectionTime").textContent =
       `${schedule[current].name} – ${format(sectionRemaining)}`;
 
+    const total = schedule.reduce((a, b) => a + b.duration, 0);
     document.getElementById("globalTime").textContent =
-      `Temps total : ${format(globalElapsed)} / ${format(totalDuration)}`;
+      `Temps : ${format(globalElapsed)} / ${format(total)}`;
 
     document.getElementById("progress").style.width =
-      `${(globalElapsed / totalDuration) * 100}%`;
+      `${(globalElapsed / total) * 100}%`;
 
     if (sectionRemaining <= 0) {
       current++;
       if (current < schedule.length) {
         startSection();
+        renderTimeline();
       } else {
         clearInterval(timer);
         document.getElementById("sectionTime").textContent = "Terminé";
