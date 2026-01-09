@@ -2,30 +2,113 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Timer Soutenance Mémoire</title>
+  <title>Timeline Soutenance</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
-      background: #111;
+      background: #0f0f0f;
       color: #eee;
-      text-align: center;
-      padding: 40px;
+      padding: 30px;
     }
-    h1 { font-size: 2.2em; }
-    #section { font-size: 1.6em; margin-top: 20px; }
-    #time { font-size: 4em; margin: 20px 0; }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #globalTime {
+      text-align: center;
+      font-size: 2.5em;
+      margin-bottom: 30px;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    .block {
+      padding: 14px;
+      border-radius: 10px;
+      text-align: center;
+      background: #222;
+      opacity: 0.4;
+      transition: 0.3s;
+    }
+
+    .block.active {
+      background: #1f6feb;
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    .block.next {
+      background: #2ea043;
+      opacity: 0.7;
+    }
+
+    .block.done {
+      background: #444;
+      opacity: 0.25;
+    }
+
+    .title {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .time {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+
+    .progress-container {
+      width: 100%;
+      background: #222;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 14px;
+      margin-bottom: 20px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #1f6feb;
+      transition: width 1s linear;
+    }
+
+    #sectionTime {
+      text-align: center;
+      font-size: 1.8em;
+      margin-bottom: 20px;
+    }
+
     button {
-      font-size: 1.2em;
+      display: block;
+      margin: 0 auto;
       padding: 12px 24px;
+      font-size: 1.1em;
       cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-<h1>Soutenance – Timer guidé</h1>
-<div id="section">Prêt</div>
-<div id="time">00:00</div>
+<h1>Timeline Soutenance</h1>
+
+<div id="globalTime">00:00</div>
+
+<div class="timeline" id="timeline"></div>
+
+<div class="progress-container">
+  <div class="progress-bar" id="progress"></div>
+</div>
+
+<div id="sectionTime">Prêt</div>
+
 <button onclick="start()">Lancer</button>
 
 <script>
@@ -34,70 +117,90 @@
    ========================= */
 
 const schedule = [
-  { name: "Introduction", duration: 120 },
-  { name: "Cadre théorique", duration: 240 },
-  { name: "Méthodologie", duration: 390 },
+  { name: "Intro", duration: 120 },
+  { name: "Théorie", duration: 240 },
+  { name: "Méthodo", duration: 390 },
   { name: "Résultats", duration: 480 },
   { name: "Takeaways", duration: 120 },
   { name: "Conclusion", duration: 180 },
-  { name: "Buffer temps", duration: 60, silent: true }
+  { name: "Buffer", duration: 60 }
 ];
 
+const totalDuration = schedule.reduce((a, b) => a + b.duration, 0);
+
 /* =========================
-   LOGIQUE
+   UI SETUP
+   ========================= */
+
+const timeline = document.getElementById("timeline");
+
+schedule.forEach(section => {
+  const block = document.createElement("div");
+  block.className = "block";
+  block.innerHTML = `
+    <div class="title">${section.name}</div>
+    <div class="time">${Math.floor(section.duration / 60)} min</div>
+  `;
+  timeline.appendChild(block);
+});
+
+/* =========================
+   TIMER LOGIC
    ========================= */
 
 let current = 0;
-let remaining = 0;
+let sectionRemaining = 0;
+let globalElapsed = 0;
 let timer = null;
 
-function speak(text) {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "fr-FR";
-  speechSynthesis.speak(utterance);
-}
-
-function format(seconds) {
-  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
-  const s = String(seconds % 60).padStart(2, "0");
+function format(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, "0");
+  const s = String(sec % 60).padStart(2, "0");
   return `${m}:${s}`;
 }
 
+function updateTimeline() {
+  [...timeline.children].forEach((block, i) => {
+    block.classList.remove("active", "next", "done");
+    if (i < current) block.classList.add("done");
+    else if (i === current) block.classList.add("active");
+    else if (i === current + 1) block.classList.add("next");
+  });
+}
+
 function startSection() {
-  const section = schedule[current];
-  remaining = section.duration;
-
-  document.getElementById("section").textContent =
-    section.silent ? "Buffer temps" : section.name;
-
-  if (!section.silent) {
-    speak(`Maintenant tu dois faire la partie ${section.name}`);
-  }
-
-  timer = setInterval(() => {
-    remaining--;
-    document.getElementById("time").textContent = format(remaining);
-
-    if (remaining === 30 && schedule[current + 1]) {
-      speak(`Dans 30 secondes on passe à la partie ${schedule[current + 1].name}`);
-    }
-
-    if (remaining <= 0) {
-      clearInterval(timer);
-      current++;
-      if (current < schedule.length) {
-        startSection();
-      } else {
-        speak("Soutenance terminée");
-        document.getElementById("section").textContent = "Terminé";
-      }
-    }
-  }, 1000);
+  sectionRemaining = schedule[current].duration;
+  updateTimeline();
 }
 
 function start() {
   current = 0;
+  globalElapsed = 0;
   startSection();
+
+  timer = setInterval(() => {
+    sectionRemaining--;
+    globalElapsed++;
+
+    document.getElementById("sectionTime").textContent =
+      `${schedule[current].name} – ${format(sectionRemaining)}`;
+
+    document.getElementById("globalTime").textContent =
+      `Temps total : ${format(globalElapsed)} / ${format(totalDuration)}`;
+
+    document.getElementById("progress").style.width =
+      `${(globalElapsed / totalDuration) * 100}%`;
+
+    if (sectionRemaining <= 0) {
+      current++;
+      if (current < schedule.length) {
+        startSection();
+      } else {
+        clearInterval(timer);
+        document.getElementById("sectionTime").textContent = "Terminé";
+      }
+    }
+  }, 1000);
 }
 </script>
 
